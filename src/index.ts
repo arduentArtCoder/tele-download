@@ -1,17 +1,6 @@
-import express from "express";
+import { Bot } from "grammy";
+import { env } from "./config/index.js";
 
-const app = express();
+const bot = new Bot(env.BOT_TOKEN);
 
-app.use(express.json());
-
-app.get("/", (_req, res) => {
-  res.json({
-    message: "API running",
-  });
-});
-
-const PORT = 3000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+console.log("not implemented");
