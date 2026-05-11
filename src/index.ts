@@ -1,6 +1,33 @@
-import { Bot } from "grammy";
-import { env } from "./config/index.js";
+import { createBot } from "./bot/createBot.js";
 
-const bot = new Bot(env.BOT_TOKEN);
+const app = await createBot();
 
-console.log("not implemented");
+let isShuttingDown = false;
+
+const stop = (signal: NodeJS.Signals) => {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+  app.logger.info("Shutting down bot", { signal });
+  app.shutdown();
+  app.bot.stop();
+};
+
+process.once("SIGINT", () => {
+  stop("SIGINT");
+});
+
+process.once("SIGTERM", () => {
+  stop("SIGTERM");
+});
+
+await app.bot.start({
+  onStart(botInfo) {
+    app.logger.info("Bot started", {
+      botId: botInfo.id,
+      username: botInfo.username,
+    });
+  },
+});
