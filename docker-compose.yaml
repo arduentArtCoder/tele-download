@@ -1,0 +1,20 @@
+services:
+  tele-download:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tele-download
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DOWNLOAD_DIR: /tmp/tele-download
+      FFMPEG_PATH: /usr/bin/ffmpeg
+      FFPROBE_PATH: /usr/bin/ffprobe
+    volumes:
+      - tele-download-data:/tmp/tele-download
+
+volumes:
+  tele-download-data:
