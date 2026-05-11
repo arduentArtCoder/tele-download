@@ -14,6 +14,8 @@ const TITLE_PREFIX = "__TITLE__";
 const FILE_PREFIX = "__FILE__";
 
 export class YtDlpService {
+  private supportedExtractorsCache?: string[];
+
   public constructor(
     private readonly config: RuntimeConfig,
     private readonly logger: Logger,
@@ -38,32 +40,54 @@ export class YtDlpService {
     };
   }
 
+  public async listSupportedExtractors(): Promise<string[]> {
+    if (this.supportedExtractorsCache) {
+      return this.supportedExtractorsCache;
+    }
+
+    const stdout = await this.runCommand(["--list-extractors"]);
+
+    const extractors = stdout
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    this.supportedExtractorsCache = extractors;
+    return extractors;
+  }
+
   private async run(
     url: string,
     outputTemplate: string,
   ): Promise<{ title?: string; filePath?: string }> {
-    return await new Promise<{ title?: string; filePath?: string }>((resolve, reject) => {
+    const stdout = await this.runCommand([
+      "--no-playlist",
+      "--no-progress",
+      "--no-warnings",
+      "--format",
+      "bv*+ba/b",
+      "--merge-output-format",
+      "mp4",
+      "--ffmpeg-location",
+      path.dirname(this.config.FFMPEG_PATH),
+      "--output",
+      outputTemplate,
+      "--print",
+      `before_dl:${TITLE_PREFIX}%(title)s`,
+      "--print",
+      `after_move:${FILE_PREFIX}%(filepath)s`,
+      url,
+    ]);
+
+    return parseStructuredOutput(stdout);
+  }
+
+  private async runCommand(arguments_: string[]): Promise<string> {
+    return await new Promise<string>((resolve, reject) => {
       const childProcess = processRegistry.track(
         spawn(
           this.config.YTDLP_PATH,
-          [
-            "--no-playlist",
-            "--no-progress",
-            "--no-warnings",
-            "--format",
-            "bv*+ba/b",
-            "--merge-output-format",
-            "mp4",
-            "--ffmpeg-location",
-            path.dirname(this.config.FFMPEG_PATH),
-            "--output",
-            outputTemplate,
-            "--print",
-            `before_dl:${TITLE_PREFIX}%(title)s`,
-            "--print",
-            `after_move:${FILE_PREFIX}%(filepath)s`,
-            url,
-          ],
+          arguments_,
           {
             stdio: ["ignore", "pipe", "pipe"],
           },
@@ -95,22 +119,22 @@ export class YtDlpService {
 
         if (code !== 0) {
           this.logger.warn("yt-dlp failed", {
+            arguments: arguments_,
             code,
             signal,
             stderr,
-            url,
           });
 
           reject(
             new UserVisibleError(
-              `yt-dlp could not download this link.${stderr.trim() ? ` ${stderr.trim()}` : ""}`,
+              `yt-dlp command failed.${stderr.trim() ? ` ${stderr.trim()}` : ""}`,
               "YTDLP_FAILED",
             ),
           );
           return;
         }
 
-        resolve(parseStructuredOutput(stdout));
+        resolve(stdout);
       });
     });
   }

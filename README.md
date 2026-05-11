@@ -13,6 +13,7 @@ Telegram bot for downloading videos from `yt-dlp` supported sources and posting 
 
 - `/start`
 - `/help`
+- `/supported`
 - `/download <url1> <url2> ...`
 
 You can also paste multiple links in a normal message and the bot will queue them as one batch.

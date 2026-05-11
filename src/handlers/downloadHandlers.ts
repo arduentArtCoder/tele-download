@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
-import type { Bot, Context } from "grammy";
+import { InputFile, type Bot, type Context } from "grammy";
 
 import { renderBatchProgress } from "../bot/progress.js";
 import type { RuntimeConfig } from "../config/index.js";
@@ -22,6 +22,19 @@ interface DownloadHandlerDependencies {
   mediaNormalizer: MediaNormalizer;
 }
 
+const MAJOR_SOURCE_RULES = [
+  { label: "YouTube", matchers: ["youtube", "youtubelivestreamembed", "youtubeytbe"] },
+  { label: "Instagram", matchers: ["instagram", "instagramios"] },
+  { label: "TikTok", matchers: ["tiktok", "vm.tiktok"] },
+  { label: "X / Twitter", matchers: ["twitter"] },
+  { label: "Facebook", matchers: ["facebook"] },
+  { label: "Reddit", matchers: ["reddit"] },
+  { label: "Vimeo", matchers: ["vimeo"] },
+  { label: "Dailymotion", matchers: ["dailymotion"] },
+  { label: "Twitch", matchers: ["twitch"] },
+  { label: "SoundCloud", matchers: ["soundcloud"] },
+] as const;
+
 export function registerDownloadHandlers(
   bot: Bot<Context>,
   dependencies: DownloadHandlerDependencies,
@@ -32,6 +45,29 @@ export function registerDownloadHandlers(
 
   bot.command("help", async (ctx) => {
     await ctx.reply(getHelpText(dependencies.config.MAX_URLS_PER_BATCH));
+  });
+
+  bot.command("supported", async (ctx) => {
+    try {
+      const extractors = await dependencies.ytDlp.listSupportedExtractors();
+      await ctx.reply(buildSupportedSummary(extractors));
+      await ctx.replyWithDocument(
+        new InputFile(
+          Buffer.from(buildSupportedDocument(extractors), "utf8"),
+          "yt-dlp-supported-extractors.txt",
+        ),
+        {
+          caption: "Live supported extractor list from the bundled yt-dlp binary.",
+        },
+      );
+    } catch (error: unknown) {
+      dependencies.logger.warn("Failed to load supported extractors", {
+        error: getErrorMessage(error),
+        stack: getErrorStack(error),
+      });
+
+      await ctx.reply("I could not load the supported source list from yt-dlp right now.");
+    }
   });
 
   bot.command("download", async (ctx) => {
@@ -238,6 +274,7 @@ function getHelpText(maxUrlsPerBatch: number): string {
     "Commands:",
     "/start - show this message",
     "/help - show this message again",
+    "/supported - show the live yt-dlp supported source list",
     "/download <url1> <url2> ... - explicitly start a batch",
     "",
     "Tips:",
@@ -245,4 +282,34 @@ function getHelpText(maxUrlsPerBatch: number): string {
     "- Links are processed sequentially per chat",
     "- Only allowed user IDs can use this bot",
   ].join("\n");
+}
+
+function buildSupportedSummary(extractors: string[]): string {
+  const featuredSources = getFeaturedSources(extractors);
+
+  return [
+    `yt-dlp currently reports ${extractors.length} extractors.`,
+    featuredSources.length > 0
+      ? `Major sources: ${featuredSources.join(", ")}.`
+      : "Major sources are available in the attached live list.",
+    "I attached the full live supported-source list as a text file.",
+    "Some entries may be marked CURRENTLY BROKEN by yt-dlp itself.",
+  ].join("\n");
+}
+
+function buildSupportedDocument(extractors: string[]): string {
+  return [
+    `yt-dlp supported extractors (${extractors.length})`,
+    "",
+    ...extractors,
+    "",
+  ].join("\n");
+}
+
+function getFeaturedSources(extractors: string[]): string[] {
+  const normalizedExtractors = new Set(extractors.map((extractor) => extractor.toLowerCase()));
+
+  return MAJOR_SOURCE_RULES.filter((rule) =>
+    rule.matchers.some((matcher) => normalizedExtractors.has(matcher)),
+  ).map((rule) => rule.label);
 }

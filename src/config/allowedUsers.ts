@@ -1,1 +1,1 @@
-export const ALLOWED_USERS = [1275605174];
+export const ALLOWED_USERS = [1275605174, 5664058337];
