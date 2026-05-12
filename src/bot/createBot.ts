@@ -7,7 +7,9 @@ import { DownloadQueue } from "../services/downloadQueue.js";
 import { FfprobeService } from "../services/ffprobe.js";
 import { MediaNormalizer } from "../services/mediaNormalizer.js";
 import { processRegistry } from "../services/processRegistry.js";
+import { SelectionRegistry } from "../services/selectionRegistry.js";
 import { TelegramDeliveryService } from "../services/telegramDelivery.js";
+import { TemporaryFileHost } from "../services/temporaryFileHost.js";
 import { validateRuntime } from "../services/runtimeValidator.js";
 import { YtDlpService } from "../services/ytDlp.js";
 import { createLogger, type Logger } from "../utils/logger.js";
@@ -28,6 +30,9 @@ export async function createBot(config: RuntimeConfig = env): Promise<AppInstanc
   const mediaNormalizer = new MediaNormalizer(config, ffprobeService, logger);
   const ytDlpService = new YtDlpService(config, logger);
   const deliveryService = new TelegramDeliveryService(bot.api);
+  const selectionRegistry = new SelectionRegistry(config.SELECTION_TTL_MS, logger);
+  const temporaryFileHost = new TemporaryFileHost(config, logger);
+  await temporaryFileHost.start();
 
   bot.use(requireAllowedUser(logger));
 
@@ -36,6 +41,8 @@ export async function createBot(config: RuntimeConfig = env): Promise<AppInstanc
     logger,
     queue,
     delivery: deliveryService,
+    selectionRegistry,
+    temporaryFileHost,
     ytDlp: ytDlpService,
     mediaNormalizer,
   });
@@ -52,7 +59,9 @@ export async function createBot(config: RuntimeConfig = env): Promise<AppInstanc
     logger,
     shutdown() {
       queue.shutdown();
+      selectionRegistry.shutdown();
       processRegistry.terminateAll();
+      void temporaryFileHost.stop();
     },
   };
 }

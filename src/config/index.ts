@@ -65,11 +65,15 @@ const binDirectory = path.resolve(process.cwd(), "bin");
 export interface RuntimeConfig {
   BOT_TOKEN: string;
   DOWNLOAD_DIR: string;
+  PUBLIC_BASE_URL: string;
+  HTTP_PORT: number;
   LOG_LEVEL: LogLevel;
   MAX_CONCURRENT_JOBS: number;
   MAX_URLS_PER_BATCH: number;
   JOB_TIMEOUT_MS: number;
   MAX_UPLOAD_BYTES: number;
+  TEMP_FILE_TTL_MS: number;
+  SELECTION_TTL_MS: number;
   YTDLP_PATH: string;
   FFMPEG_PATH: string;
   FFPROBE_PATH: string;
@@ -80,11 +84,15 @@ export const env: RuntimeConfig = {
   DOWNLOAD_DIR: resolveFromProjectRoot(
     readOptionalString("DOWNLOAD_DIR") ?? path.join(os.tmpdir(), "tele-download"),
   ),
+  PUBLIC_BASE_URL: readPublicBaseUrl("PUBLIC_BASE_URL"),
+  HTTP_PORT: readNumber("HTTP_PORT", 3000),
   LOG_LEVEL: readLogLevel("LOG_LEVEL", "info"),
   MAX_CONCURRENT_JOBS: readNumber("MAX_CONCURRENT_JOBS", 2),
   MAX_URLS_PER_BATCH: readNumber("MAX_URLS_PER_BATCH", 5),
   JOB_TIMEOUT_MS: readNumber("JOB_TIMEOUT_MS", 10 * 60 * 1000),
   MAX_UPLOAD_BYTES: readNumber("MAX_UPLOAD_BYTES", 50 * 1024 * 1024),
+  TEMP_FILE_TTL_MS: readNumber("TEMP_FILE_TTL_MS", 60 * 60 * 1000),
+  SELECTION_TTL_MS: readNumber("SELECTION_TTL_MS", 15 * 60 * 1000),
   YTDLP_PATH: resolveFromProjectRoot(readOptionalString("YTDLP_PATH") ?? path.join(binDirectory, "yt-dlp")),
   FFMPEG_PATH: resolveFromProjectRoot(
     readOptionalString("FFMPEG_PATH") ?? path.join(binDirectory, "ffmpeg"),
@@ -93,3 +101,21 @@ export const env: RuntimeConfig = {
     readOptionalString("FFPROBE_PATH") ?? path.join(binDirectory, "ffprobe"),
   ),
 };
+
+function readPublicBaseUrl(name: string): string {
+  const value = readRequiredString(name);
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(value);
+  } catch {
+    throw new Error(`Environment variable ${name} must be a valid absolute URL`);
+  }
+
+  parsedUrl.pathname = parsedUrl.pathname.endsWith("/") ? parsedUrl.pathname : `${parsedUrl.pathname}/`;
+  parsedUrl.search = "";
+  parsedUrl.hash = "";
+
+  return parsedUrl.toString().replace(/\/$/u, "");
+}

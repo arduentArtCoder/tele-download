@@ -11,8 +11,11 @@ services:
     environment:
       NODE_ENV: production
       DOWNLOAD_DIR: /tmp/tele-download
+      HTTP_PORT: ${HTTP_PORT:-3000}
       FFMPEG_PATH: /usr/bin/ffmpeg
       FFPROBE_PATH: /usr/bin/ffprobe
+    ports:
+      - "${HTTP_PORT:-3000}:${HTTP_PORT:-3000}"
     volumes:
       - tele-download-data:/tmp/tele-download
 

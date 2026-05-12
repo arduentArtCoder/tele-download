@@ -1,10 +1,26 @@
 export type BatchItemStatus =
   | "queued"
+  | "inspecting"
+  | "awaiting_selection"
   | "downloading"
   | "probing"
   | "uploading"
+  | "hosting"
   | "done"
-  | "failed";
+  | "failed"
+  | "expired";
+
+export type DeliveryMode = "telegram" | "link";
+
+export interface DownloadOption {
+  id: string;
+  label: string;
+  formatSelector: string;
+  deliveryMode: DeliveryMode;
+  estimatedSizeBytes?: number;
+  height?: number;
+  width?: number;
+}
 
 export interface BatchItemState {
   index: number;
@@ -13,6 +29,10 @@ export interface BatchItemState {
   title?: string;
   sourceHost?: string;
   fileSizeBytes?: number;
+  availableOptions?: DownloadOption[];
+  selectedOptionId?: string;
+  selectionExpiresAt?: Date;
+  hostedDownloadUrl?: string;
   error?: string;
 }
 
@@ -24,6 +44,7 @@ export interface ChatTarget {
 export interface BatchState {
   id: string;
   target: ChatTarget;
+  requesterUserId: number;
   items: BatchItemState[];
   createdAt: Date;
 }
@@ -34,6 +55,13 @@ export interface DownloadedMedia {
   sourceUrl: string;
   filePath: string;
   fileName: string;
+}
+
+export interface InspectedMedia {
+  title: string;
+  sourceHost: string;
+  sourceUrl: string;
+  options: DownloadOption[];
 }
 
 export interface MediaProbeResult {
@@ -54,4 +82,15 @@ export interface PreparedMedia extends MediaProbeResult {
 export interface StatusMessageRef {
   chatId: number;
   messageId: number;
+}
+
+export interface SelectionButton {
+  text: string;
+  token: string;
+}
+
+export interface HostedFileLink {
+  token: string;
+  url: string;
+  expiresAt: Date;
 }

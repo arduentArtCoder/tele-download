@@ -4,14 +4,42 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import type { RuntimeConfig } from "../config/index.js";
-import type { DownloadedMedia } from "../types/download.js";
+import type { DeliveryMode, DownloadOption, DownloadedMedia, InspectedMedia } from "../types/download.js";
 import { UserVisibleError } from "../utils/errors.js";
+import { formatBinarySize } from "../utils/formatting.js";
 import type { Logger } from "../utils/logger.js";
 import { getSourceHost } from "../utils/urls.js";
 import { processRegistry } from "./processRegistry.js";
 
 const TITLE_PREFIX = "__TITLE__";
 const FILE_PREFIX = "__FILE__";
+const MAX_CURATED_OPTIONS = 5;
+
+interface YtDlpFormatJson {
+  format_id?: string;
+  width?: number;
+  height?: number;
+  acodec?: string;
+  vcodec?: string;
+  filesize?: number;
+  filesize_approx?: number;
+  tbr?: number;
+}
+
+interface YtDlpInspectionJson {
+  title?: string;
+  formats?: YtDlpFormatJson[];
+}
+
+interface CandidateOption {
+  formatId: string;
+  formatSelector: string;
+  estimatedSizeBytes?: number;
+  hasAudio: boolean;
+  height?: number;
+  tbr?: number;
+  width?: number;
+}
 
 export class YtDlpService {
   private supportedExtractorsCache?: string[];
@@ -21,10 +49,46 @@ export class YtDlpService {
     private readonly logger: Logger,
   ) {}
 
-  public async download(url: string, outputDirectory: string): Promise<DownloadedMedia> {
+  public async inspectFormats(url: string): Promise<InspectedMedia> {
+    const stdout = await this.runCommand([
+      "--dump-single-json",
+      "--no-download",
+      "--no-playlist",
+      "--no-warnings",
+      url,
+    ]);
+
+    let parsedOutput: YtDlpInspectionJson;
+
+    try {
+      parsedOutput = JSON.parse(stdout) as YtDlpInspectionJson;
+    } catch {
+      throw new UserVisibleError("yt-dlp returned an unreadable format list.", "YTDLP_FORMAT_LIST_INVALID");
+    }
+
+    const sourceHost = getSourceHost(url);
+    const options = curateDownloadOptions(parsedOutput.formats ?? [], this.config.MAX_UPLOAD_BYTES);
+
+    if (options.length === 0) {
+      throw new UserVisibleError("No downloadable video formats were found for this link.");
+    }
+
+    return {
+      title: parsedOutput.title?.trim() || `${sourceHost} video`,
+      sourceHost,
+      sourceUrl: url,
+      options,
+    };
+  }
+
+  public async download(
+    url: string,
+    formatSelector: string,
+    outputDirectory: string,
+  ): Promise<DownloadedMedia> {
     const outputTemplate = path.join(outputDirectory, "media.%(ext)s");
     const sourceHost = getSourceHost(url);
-    const result = await this.run(url, outputTemplate);
+    const result = await this.run(url, formatSelector, outputTemplate);
     const filePath = result.filePath ?? (await this.findDownloadedFile(outputDirectory));
 
     if (!filePath) {
@@ -58,6 +122,7 @@ export class YtDlpService {
 
   private async run(
     url: string,
+    formatSelector: string,
     outputTemplate: string,
   ): Promise<{ title?: string; filePath?: string }> {
     const stdout = await this.runCommand([
@@ -65,7 +130,7 @@ export class YtDlpService {
       "--no-progress",
       "--no-warnings",
       "--format",
-      "bv*+ba/b",
+      formatSelector,
       "--merge-output-format",
       "mp4",
       "--ffmpeg-location",
@@ -85,13 +150,9 @@ export class YtDlpService {
   private async runCommand(arguments_: string[]): Promise<string> {
     return await new Promise<string>((resolve, reject) => {
       const childProcess = processRegistry.track(
-        spawn(
-          this.config.YTDLP_PATH,
-          arguments_,
-          {
-            stdio: ["ignore", "pipe", "pipe"],
-          },
-        ),
+        spawn(this.config.YTDLP_PATH, arguments_, {
+          stdio: ["ignore", "pipe", "pipe"],
+        }),
       );
 
       let stdout = "";
@@ -160,6 +221,145 @@ export class YtDlpService {
   }
 }
 
+export function curateDownloadOptions(
+  formats: YtDlpFormatJson[],
+  maxUploadBytes: number,
+): DownloadOption[] {
+  const bestAudioEstimate = getBestAudioEstimate(formats);
+  const candidates = formats
+    .filter(isVideoFormat)
+    .map((format) => buildCandidateOption(format, bestAudioEstimate));
+
+  const optionsByHeight = new Map<number, CandidateOption>();
+
+  for (const candidate of candidates) {
+    const heightKey = candidate.height ?? 0;
+    const existing = optionsByHeight.get(heightKey);
+
+    if (!existing || compareCandidateOptions(candidate, existing) < 0) {
+      optionsByHeight.set(heightKey, candidate);
+    }
+  }
+
+  return [...optionsByHeight.entries()]
+    .sort((left, right) => right[0] - left[0])
+    .slice(0, MAX_CURATED_OPTIONS)
+    .map(([, candidate], index) => buildDownloadOption(candidate, index, maxUploadBytes));
+}
+
+export function getDeliveryModeForSize(
+  sizeBytes: number | undefined,
+  maxUploadBytes: number,
+): DeliveryMode {
+  if (typeof sizeBytes === "number" && Number.isFinite(sizeBytes) && sizeBytes > maxUploadBytes) {
+    return "link";
+  }
+
+  return "telegram";
+}
+
+function buildCandidateOption(
+  format: YtDlpFormatJson,
+  bestAudioEstimate: number | undefined,
+): CandidateOption {
+  const hasAudio = format.acodec !== undefined && format.acodec !== "none";
+  const ownSizeEstimate = sanitizeSize(format.filesize) ?? sanitizeSize(format.filesize_approx);
+  const candidate: CandidateOption = {
+    formatId: format.format_id ?? "best",
+    formatSelector:
+      format.format_id === undefined
+        ? "bestvideo*+bestaudio/best"
+        : hasAudio
+          ? format.format_id
+          : `${format.format_id}+bestaudio/best`,
+    hasAudio,
+    ...(typeof format.height === "number" ? { height: format.height } : {}),
+    ...(typeof format.tbr === "number" ? { tbr: format.tbr } : {}),
+    ...(typeof format.width === "number" ? { width: format.width } : {}),
+  };
+
+  const estimatedSizeBytes = estimateCombinedSize(ownSizeEstimate, hasAudio, bestAudioEstimate);
+
+  if (typeof estimatedSizeBytes === "number") {
+    candidate.estimatedSizeBytes = estimatedSizeBytes;
+  }
+
+  return candidate;
+}
+
+function buildDownloadOption(
+  candidate: CandidateOption,
+  index: number,
+  maxUploadBytes: number,
+): DownloadOption {
+  const deliveryMode = getDeliveryModeForSize(candidate.estimatedSizeBytes, maxUploadBytes);
+  const qualityLabel = typeof candidate.height === "number" ? `${candidate.height}p` : "Best available";
+  const deliveryLabel = deliveryMode === "telegram" ? "Telegram" : "1h link";
+
+  return {
+    id: `option-${index + 1}`,
+    label: `${qualityLabel} • ${formatBinarySize(candidate.estimatedSizeBytes)} • ${deliveryLabel}`,
+    formatSelector: candidate.formatSelector,
+    deliveryMode,
+    ...(typeof candidate.estimatedSizeBytes === "number"
+      ? { estimatedSizeBytes: candidate.estimatedSizeBytes }
+      : {}),
+    ...(typeof candidate.height === "number" ? { height: candidate.height } : {}),
+    ...(typeof candidate.width === "number" ? { width: candidate.width } : {}),
+  };
+}
+
+function compareCandidateOptions(left: CandidateOption, right: CandidateOption): number {
+  if (left.hasAudio !== right.hasAudio) {
+    return left.hasAudio ? -1 : 1;
+  }
+
+  const leftKnownSize = typeof left.estimatedSizeBytes === "number";
+  const rightKnownSize = typeof right.estimatedSizeBytes === "number";
+  if (leftKnownSize !== rightKnownSize) {
+    return leftKnownSize ? -1 : 1;
+  }
+
+  if (left.estimatedSizeBytes !== right.estimatedSizeBytes) {
+    return (right.estimatedSizeBytes ?? 0) - (left.estimatedSizeBytes ?? 0);
+  }
+
+  return (right.tbr ?? 0) - (left.tbr ?? 0);
+}
+
+function estimateCombinedSize(
+  ownSizeEstimate: number | undefined,
+  hasAudio: boolean,
+  bestAudioEstimate: number | undefined,
+): number | undefined {
+  if (hasAudio) {
+    return ownSizeEstimate;
+  }
+
+  if (typeof ownSizeEstimate === "number" && typeof bestAudioEstimate === "number") {
+    return ownSizeEstimate + bestAudioEstimate;
+  }
+
+  return ownSizeEstimate;
+}
+
+function getBestAudioEstimate(formats: YtDlpFormatJson[]): number | undefined {
+  const audioFormats = formats
+    .filter((format) => format.vcodec === "none" && format.acodec !== undefined && format.acodec !== "none")
+    .map((format) => sanitizeSize(format.filesize) ?? sanitizeSize(format.filesize_approx))
+    .filter((sizeBytes): sizeBytes is number => typeof sizeBytes === "number");
+
+  if (audioFormats.length === 0) {
+    return undefined;
+  }
+
+  return Math.max(...audioFormats);
+}
+
+function isVideoFormat(format: YtDlpFormatJson): boolean {
+  return Boolean(format.format_id) && format.vcodec !== undefined && format.vcodec !== "none";
+}
+
 function parseStructuredOutput(stdout: string): { title?: string; filePath?: string } {
   const lines = stdout
     .split(/\r?\n/u)
@@ -190,4 +390,12 @@ function isTemporaryFile(filePath: string): boolean {
     lowerCasePath.endsWith(".png") ||
     lowerCasePath.endsWith(".webp")
   );
+}
+
+function sanitizeSize(sizeBytes: number | undefined): number | undefined {
+  if (typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return undefined;
+  }
+
+  return sizeBytes;
 }

@@ -16,7 +16,7 @@ export class MediaNormalizer {
     private readonly logger: Logger,
   ) {}
 
-  public async prepareForTelegram(filePath: string): Promise<PreparedMedia> {
+  public async prepareForDelivery(filePath: string): Promise<PreparedMedia> {
     const initialProbe = await this.ffprobeService.probe(filePath);
 
     if (!initialProbe.hasVideo) {
@@ -31,13 +31,6 @@ export class MediaNormalizer {
 
     if (!finalProbe.containerName.includes("mp4")) {
       throw new UserVisibleError("The downloaded video could not be converted into an MP4 upload.");
-    }
-
-    if (finalProbe.sizeBytes > this.config.MAX_UPLOAD_BYTES) {
-      const maxSizeInMegabytes = Math.floor(this.config.MAX_UPLOAD_BYTES / (1024 * 1024));
-      throw new UserVisibleError(
-        `This video is ${formatMegabytes(finalProbe.sizeBytes)} MB, which exceeds the ${maxSizeInMegabytes} MB Telegram bot upload limit.`,
-      );
     }
 
     return {
@@ -103,8 +96,4 @@ export class MediaNormalizer {
 
     return outputPath;
   }
-}
-
-function formatMegabytes(sizeBytes: number): string {
-  return (sizeBytes / (1024 * 1024)).toFixed(1);
 }

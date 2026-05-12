@@ -2,11 +2,15 @@ import type { BatchItemState, BatchState } from "../types/download.js";
 
 const STATUS_LABELS: Record<BatchItemState["status"], string> = {
   queued: "queued",
+  inspecting: "inspecting",
+  awaiting_selection: "awaiting selection",
   downloading: "downloading",
   probing: "probing",
   uploading: "uploading",
+  hosting: "hosting",
   done: "done",
   failed: "failed",
+  expired: "expired",
 };
 
 export function renderBatchProgress(batch: BatchState): string {
