@@ -31,25 +31,7 @@ npm run build
 node dist/index.js
 ```
 
-#### Docker
-
-Build and run with Docker Compose:
-
-```bash
-cp .env.example .env
-# set BOT_TOKEN and PUBLIC_BASE_URL in .env first
-docker compose up --build -d
-```
-
-Stop it with:
-
-```bash
-docker compose down
-```
-
-The compose setup stores temporary downloads in a named Docker volume mounted at `/tmp/tele-download`, and exposes the embedded HTTP server on `HTTP_PORT`. In production you will usually place a reverse proxy or public domain in front of that port and point `PUBLIC_BASE_URL` at the externally reachable URL.
-
-Inside Docker, the app uses the container's installed `ffmpeg` and `ffprobe` for compatibility, while local non-Docker runs still default to the bundled binaries in `bin/`.
+For a long-running server process, use your preferred service manager such as `systemd`, `pm2`, or another supervisor around `node dist/index.js`.
 
 The bot always runs `yt-dlp` with `--cookies-from-browser chrome`, or `--cookies-from-browser chrome:<profile>` when `CHROME_PROFILE` is set. Per the yt-dlp README, the profile portion is the documented way to target a specific Chrome profile.
 
