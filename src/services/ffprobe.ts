@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 
-import type { RuntimeConfig } from "../config/index.js";
 import type { MediaProbeResult } from "../types/download.js";
 import { UserVisibleError } from "../utils/errors.js";
 import type { Logger } from "../utils/logger.js";
@@ -20,10 +19,7 @@ interface FfprobeJson {
 }
 
 export class FfprobeService {
-  public constructor(
-    private readonly config: RuntimeConfig,
-    private readonly logger: Logger,
-  ) {}
+  public constructor(private readonly logger: Logger) {}
 
   public async probe(filePath: string): Promise<MediaProbeResult> {
     const rawOutput = await this.run(filePath);
@@ -50,7 +46,7 @@ export class FfprobeService {
     return await new Promise<string>((resolve, reject) => {
       const childProcess = processRegistry.track(
         spawn(
-          this.config.FFPROBE_PATH,
+          "ffprobe",
           [
             "-v",
             "error",

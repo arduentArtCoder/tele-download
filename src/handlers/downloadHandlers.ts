@@ -70,7 +70,7 @@ export function registerDownloadHandlers(
           "yt-dlp-supported-extractors.txt",
         ),
         {
-          caption: "Live supported extractor list from the bundled yt-dlp binary.",
+          caption: "Live supported extractor list from the system yt-dlp installation.",
         },
       );
     } catch (error: unknown) {

@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,16 +7,14 @@ import type { RuntimeConfig } from "../config/index.js";
 import type { Logger } from "../utils/logger.js";
 import { processRegistry } from "./processRegistry.js";
 
-async function ensureExecutable(binaryPath: string): Promise<void> {
-  await access(binaryPath, constants.X_OK);
-}
+const REQUIRED_SYSTEM_BINARIES = ["yt-dlp", "ffmpeg", "ffprobe"] as const;
 
-async function ensureBinaryRuns(binaryPath: string): Promise<void> {
-  const versionArgument = getVersionArgument(binaryPath);
+async function ensureCommandRuns(command: string): Promise<void> {
+  const versionArgument = getVersionArgument(command);
 
   await new Promise<void>((resolve, reject) => {
     const childProcess = processRegistry.track(
-      spawn(binaryPath, [versionArgument], {
+      spawn(command, [versionArgument], {
         stdio: ["ignore", "ignore", "pipe"],
       }),
     );
@@ -35,13 +32,53 @@ async function ensureBinaryRuns(binaryPath: string): Promise<void> {
         return;
       }
 
-      reject(new Error(`Failed to execute ${binaryPath}: ${stderr.trim() || `exit code ${code ?? "unknown"}`}`));
+      reject(new Error(`Failed to execute ${command}: ${stderr.trim() || `exit code ${code ?? "unknown"}`}`));
     });
   });
 }
 
-function getVersionArgument(binaryPath: string): string {
-  const binaryName = path.basename(binaryPath).toLowerCase();
+async function ensureSecretStorageAvailable(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const childProcess = processRegistry.track(
+      spawn("python3", ["-c", "import secretstorage"], {
+        stdio: ["ignore", "ignore", "pipe"],
+      }),
+    );
+
+    let stderr = "";
+
+    childProcess.stderr.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+
+    childProcess.once("error", (error) => {
+      reject(
+        new Error(
+          `Failed to execute python3: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    });
+    childProcess.once("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(
+        new Error(
+          `Chromium cookie extraction requires the system Python secretstorage module. Install python3-secretstorage.${stderr.trim() ? ` ${stderr.trim()}` : ""}`,
+        ),
+      );
+    });
+  });
+}
+
+function getVersionArgument(command: string): string {
+  const binaryName = path.basename(command).toLowerCase();
+
+  if (binaryName === "python3") {
+    return "--version";
+  }
 
   if (binaryName === "ffmpeg" || binaryName === "ffprobe") {
     return "-version";
@@ -53,29 +90,24 @@ function getVersionArgument(binaryPath: string): string {
 export async function validateRuntime(config: RuntimeConfig, logger: Logger): Promise<void> {
   await mkdir(config.DOWNLOAD_DIR, { recursive: true });
 
-  const binaries = [config.YTDLP_PATH, config.FFMPEG_PATH, config.FFPROBE_PATH];
-
-  for (const binaryPath of binaries) {
-    await ensureExecutable(binaryPath);
-    await ensureBinaryRuns(binaryPath);
+  for (const command of REQUIRED_SYSTEM_BINARIES) {
+    await ensureCommandRuns(command);
   }
 
-  if (config.CHROME_PATH) {
-    await ensureExecutable(config.CHROME_PATH);
-  }
+  await ensureCommandRuns("python3");
+  await ensureSecretStorageAvailable();
 
   if (config.CHROME_PROFILE) {
     const chromeCookiesPath = resolveChromeCookiesPath(config.CHROME_PROFILE);
 
     try {
-      await access(chromeCookiesPath, constants.R_OK);
+      await access(chromeCookiesPath);
     } catch {
       throw new Error(buildChromeProfileValidationError(config.CHROME_PROFILE, chromeCookiesPath));
     }
   }
 
   logger.info("Runtime validation complete", {
-    chromePath: config.CHROME_PATH ?? "auto",
     downloadDir: config.DOWNLOAD_DIR,
   });
 }

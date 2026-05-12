@@ -1,7 +1,6 @@
 import "dotenv/config";
 
 import os from "node:os";
-import path from "node:path";
 
 const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 
@@ -52,19 +51,8 @@ function readLogLevel(name: string, fallback: LogLevel): LogLevel {
   throw new Error(`Environment variable ${name} must be one of: ${LOG_LEVELS.join(", ")}`);
 }
 
-function resolveFromProjectRoot(filePath: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath;
-  }
-
-  return path.resolve(process.cwd(), filePath);
-}
-
-const binDirectory = path.resolve(process.cwd(), "bin");
-
 export interface RuntimeConfig {
   BOT_TOKEN: string;
-  CHROME_PATH?: string;
   CHROME_PROFILE?: string;
   DOWNLOAD_DIR: string;
   PUBLIC_BASE_URL: string;
@@ -76,18 +64,12 @@ export interface RuntimeConfig {
   MAX_UPLOAD_BYTES: number;
   TEMP_FILE_TTL_MS: number;
   SELECTION_TTL_MS: number;
-  YTDLP_PATH: string;
-  FFMPEG_PATH: string;
-  FFPROBE_PATH: string;
 }
 
 export const env: RuntimeConfig = {
   BOT_TOKEN: readRequiredString("BOT_TOKEN"),
-  ...(readChromePath() ?? {}),
   ...(readChromeProfile() ?? {}),
-  DOWNLOAD_DIR: resolveFromProjectRoot(
-    readOptionalString("DOWNLOAD_DIR") ?? path.join(os.tmpdir(), "tele-download"),
-  ),
+  DOWNLOAD_DIR: readOptionalString("DOWNLOAD_DIR") ?? `${os.tmpdir()}/tele-download`,
   PUBLIC_BASE_URL: readPublicBaseUrl("PUBLIC_BASE_URL"),
   HTTP_PORT: readNumber("HTTP_PORT", 3000),
   LOG_LEVEL: readLogLevel("LOG_LEVEL", "info"),
@@ -97,13 +79,6 @@ export const env: RuntimeConfig = {
   MAX_UPLOAD_BYTES: readNumber("MAX_UPLOAD_BYTES", 50 * 1024 * 1024),
   TEMP_FILE_TTL_MS: readNumber("TEMP_FILE_TTL_MS", 60 * 60 * 1000),
   SELECTION_TTL_MS: readNumber("SELECTION_TTL_MS", 15 * 60 * 1000),
-  YTDLP_PATH: resolveFromProjectRoot(readOptionalString("YTDLP_PATH") ?? path.join(binDirectory, "yt-dlp")),
-  FFMPEG_PATH: resolveFromProjectRoot(
-    readOptionalString("FFMPEG_PATH") ?? path.join(binDirectory, "ffmpeg"),
-  ),
-  FFPROBE_PATH: resolveFromProjectRoot(
-    readOptionalString("FFPROBE_PATH") ?? path.join(binDirectory, "ffprobe"),
-  ),
 };
 
 function readPublicBaseUrl(name: string): string {
@@ -122,22 +97,6 @@ function readPublicBaseUrl(name: string): string {
   parsedUrl.hash = "";
 
   return parsedUrl.toString().replace(/\/$/u, "");
-}
-
-function readChromePath():
-  | {
-      CHROME_PATH: string;
-    }
-  | undefined {
-  const chromePath = readOptionalString("CHROME_PATH");
-
-  if (!chromePath) {
-    return undefined;
-  }
-
-  return {
-    CHROME_PATH: resolveFromProjectRoot(chromePath),
-  };
 }
 
 function readChromeProfile():

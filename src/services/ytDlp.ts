@@ -86,7 +86,7 @@ export class YtDlpService {
     formatSelector: string,
     outputDirectory: string,
   ): Promise<DownloadedMedia> {
-    const outputTemplate = path.join(outputDirectory, "media.%(ext)s");
+    const outputTemplate = `${outputDirectory}/media.%(ext)s`;
     const sourceHost = getSourceHost(url);
     const result = await this.run(url, formatSelector, outputTemplate);
     const filePath = result.filePath ?? (await this.findDownloadedFile(outputDirectory));
@@ -133,8 +133,6 @@ export class YtDlpService {
       formatSelector,
       "--merge-output-format",
       "mp4",
-      "--ffmpeg-location",
-      path.dirname(this.config.FFMPEG_PATH),
       "--output",
       outputTemplate,
       "--print",
@@ -155,8 +153,7 @@ export class YtDlpService {
 
     return await new Promise<string>((resolve, reject) => {
       const childProcess = processRegistry.track(
-        spawn(this.config.YTDLP_PATH, finalArguments, {
-          env: buildChildEnvironment(this.config.CHROME_PATH),
+        spawn("yt-dlp", finalArguments, {
           stdio: ["ignore", "pipe", "pipe"],
         }),
       );
@@ -422,16 +419,9 @@ export function buildYtDlpErrorMessage(stderr: string): string {
     return `${baseMessage} CHROME_PROFILE must be the real on-disk Chrome profile directory, such as "Default" or "Profile 2".`;
   }
 
-  return baseMessage;
-}
-
-function buildChildEnvironment(chromePath: string | undefined): NodeJS.ProcessEnv {
-  if (!chromePath) {
-    return process.env;
+  if (trimmedStderr.includes("secretstorage not available")) {
+    return `${baseMessage} Install the system Python secretstorage module, for example python3-secretstorage, before starting the app.`;
   }
 
-  return {
-    ...process.env,
-    CHROME_PATH: chromePath,
-  };
+  return baseMessage;
 }

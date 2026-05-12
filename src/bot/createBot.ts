@@ -26,8 +26,8 @@ export async function createBot(config: RuntimeConfig = env): Promise<AppInstanc
 
   const bot = new Bot<Context>(config.BOT_TOKEN);
   const queue = new DownloadQueue(config.MAX_CONCURRENT_JOBS, 1, logger);
-  const ffprobeService = new FfprobeService(config, logger);
-  const mediaNormalizer = new MediaNormalizer(config, ffprobeService, logger);
+  const ffprobeService = new FfprobeService(logger);
+  const mediaNormalizer = new MediaNormalizer(ffprobeService, logger);
   const ytDlpService = new YtDlpService(config, logger);
   const deliveryService = new TelegramDeliveryService(bot.api);
   const selectionRegistry = new SelectionRegistry(config.SELECTION_TTL_MS, logger);

@@ -2,7 +2,6 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-import type { RuntimeConfig } from "../config/index.js";
 import type { PreparedMedia } from "../types/download.js";
 import { UserVisibleError } from "../utils/errors.js";
 import type { Logger } from "../utils/logger.js";
@@ -11,7 +10,6 @@ import { processRegistry } from "./processRegistry.js";
 
 export class MediaNormalizer {
   public constructor(
-    private readonly config: RuntimeConfig,
     private readonly ffprobeService: FfprobeService,
     private readonly logger: Logger,
   ) {}
@@ -46,7 +44,7 @@ export class MediaNormalizer {
     await new Promise<void>((resolve, reject) => {
       const childProcess = processRegistry.track(
         spawn(
-          this.config.FFMPEG_PATH,
+          "ffmpeg",
           [
             "-hide_banner",
             "-loglevel",

@@ -61,3 +61,11 @@ test("cookie database failures explain that CHROME_PROFILE must be a real direct
   assert.match(message, /Default/u);
   assert.match(message, /Profile 2/u);
 });
+
+test("secretstorage failures explain the required system package", () => {
+  const message = buildYtDlpErrorMessage(
+    "ERROR: secretstorage not available as the `secretstorage` module is not installed.",
+  );
+
+  assert.match(message, /python3-secretstorage/u);
+});

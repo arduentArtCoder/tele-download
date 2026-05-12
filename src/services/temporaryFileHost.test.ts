@@ -11,6 +11,7 @@ import { buildHostedFileUrl, TemporaryFileHost } from "./temporaryFileHost.js";
 function createRuntimeConfig(tempFileTtlMs: number): RuntimeConfig {
   return {
     BOT_TOKEN: "test-token",
+    CHROME_PROFILE: "Default",
     DOWNLOAD_DIR: os.tmpdir(),
     PUBLIC_BASE_URL: "https://downloads.example.com",
     HTTP_PORT: 3000,
@@ -21,9 +22,6 @@ function createRuntimeConfig(tempFileTtlMs: number): RuntimeConfig {
     MAX_UPLOAD_BYTES: 50 * 1024 * 1024,
     TEMP_FILE_TTL_MS: tempFileTtlMs,
     SELECTION_TTL_MS: 1_000,
-    YTDLP_PATH: "/tmp/yt-dlp",
-    FFMPEG_PATH: "/tmp/ffmpeg",
-    FFPROBE_PATH: "/tmp/ffprobe",
   };
 }
 
