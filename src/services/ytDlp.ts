@@ -50,7 +50,7 @@ export class YtDlpService {
   ) {}
 
   public async inspectFormats(url: string): Promise<InspectedMedia> {
-    const stdout = await this.runCommand([
+    const stdout = await this.runCommand(url, [
       "--dump-single-json",
       "--no-download",
       "--no-playlist",
@@ -109,7 +109,7 @@ export class YtDlpService {
       return this.supportedExtractorsCache;
     }
 
-    const stdout = await this.runCommand(["--list-extractors"]);
+    const stdout = await this.runCommand(undefined, ["--list-extractors"]);
 
     const extractors = stdout
       .split(/\r?\n/u)
@@ -125,7 +125,7 @@ export class YtDlpService {
     formatSelector: string,
     outputTemplate: string,
   ): Promise<{ title?: string; filePath?: string }> {
-    const stdout = await this.runCommand([
+    const stdout = await this.runCommand(url, [
       "--no-playlist",
       "--no-progress",
       "--no-warnings",
@@ -147,7 +147,7 @@ export class YtDlpService {
     return parseStructuredOutput(stdout);
   }
 
-  private async runCommand(arguments_: string[]): Promise<string> {
+  private async runCommand(_url: string | undefined, arguments_: string[]): Promise<string> {
     return await new Promise<string>((resolve, reject) => {
       const childProcess = processRegistry.track(
         spawn(this.config.YTDLP_PATH, arguments_, {
