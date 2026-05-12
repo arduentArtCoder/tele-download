@@ -6,7 +6,7 @@ Telegram bot for inspecting `yt-dlp` video formats, letting the user choose a pr
 
 1. Copy `.env.example` to `.env`
 2. Set `BOT_TOKEN`
-3. Install the required system dependencies: `yt-dlp`, `ffmpeg`, `ffprobe`, `python3`, `python3-secretstorage`, and Google Chrome
+3. Install the required system dependencies: `yt-dlp`, `ffmpeg`, `ffprobe`, and Google Chrome
 4. Set `CHROME_PROFILE` to the real Chrome profile directory if the logged-in account is not in the default profile
 5. Set `PUBLIC_BASE_URL` to the public URL users will open for temporary downloads
 6. Add allowed Telegram user IDs in `src/config/allowedUsers.ts`
@@ -32,11 +32,11 @@ node dist/index.js
 
 For a long-running server process, use your preferred service manager such as `systemd`, `pm2`, or another supervisor around `node dist/index.js`.
 
-For Instagram URLs, the bot runs `yt-dlp` with `--cookies-from-browser chrome`, or `--cookies-from-browser chrome:<profile>` when `CHROME_PROFILE` is set. Per the yt-dlp README, the profile portion is the documented way to target a specific Chrome profile.
+For Instagram URLs, the bot runs `yt-dlp` with `--cookies-from-browser chrome`, or `--cookies-from-browser chrome:<profile>` when `CHROME_PROFILE` is set. Per the yt-dlp README, the profile portion is the documented way to target a specific Chrome profile. The app also adds `--ignore-config` to every `yt-dlp` invocation so host-level `yt-dlp` config files do not change production behavior.
 
 Important: `CHROME_PROFILE` is not the friendly name shown in the Chrome profile switcher unless that happens to match the directory name. Common valid values are `Default` and `Profile 2`. If you set something like `Arthur`, the bot now fails at startup if `~/.config/google-chrome/Arthur/Cookies` does not exist.
 
-Startup also fails immediately if any required system dependency is missing. On Linux servers, the app expects `yt-dlp`, `ffmpeg`, `ffprobe`, `python3`, `python3-secretstorage`, and a Chrome installation with the target profile available under `~/.config/google-chrome/`.
+Startup fails immediately if required core system dependencies are missing. On Linux servers, the app always expects `yt-dlp`, `ffmpeg`, and `ffprobe`. When you configure `CHROME_PROFILE` for Instagram browser-cookie auth, it also expects `python3`, `python3-secretstorage`, and a Chrome installation with the target profile available under `~/.config/google-chrome/`.
 
 #### Commands
 

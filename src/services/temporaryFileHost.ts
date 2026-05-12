@@ -158,19 +158,29 @@ export class TemporaryFileHost {
       return;
     }
 
-    response.writeHead(200, {
-      "Cache-Control": "private, no-store, max-age=0",
-      "Content-Disposition": `attachment; filename="${sanitizeHeaderValue(entry.fileName)}"`,
-      "Content-Type": "application/octet-stream",
-    });
-
     const stream = createReadStream(entry.filePath);
-    stream.on("error", async () => {
-      response.writeHead(404);
-      response.end("Not found");
-      await this.deleteEntry(entry);
+    let streamOpened = false;
+
+    stream.once("open", () => {
+      streamOpened = true;
+      response.writeHead(200, {
+        "Cache-Control": "private, no-store, max-age=0",
+        "Content-Disposition": `attachment; filename="${sanitizeHeaderValue(entry.fileName)}"`,
+        "Content-Type": "application/octet-stream",
+      });
+      stream.pipe(response);
     });
-    stream.pipe(response);
+    stream.once("error", async () => {
+      await this.deleteEntry(entry);
+
+      if (!streamOpened) {
+        response.writeHead(404);
+        response.end("Not found");
+        return;
+      }
+
+      response.destroy();
+    });
   }
 
   private async deleteEntry(entry: HostedFileEntry): Promise<void> {

@@ -94,10 +94,10 @@ export async function validateRuntime(config: RuntimeConfig, logger: Logger): Pr
     await ensureCommandRuns(command);
   }
 
-  await ensureCommandRuns("python3");
-  await ensureSecretStorageAvailable();
-
   if (config.CHROME_PROFILE) {
+    await ensureCommandRuns("python3");
+    await ensureSecretStorageAvailable();
+
     const chromeCookiesPath = resolveChromeCookiesPath(config.CHROME_PROFILE);
 
     try {

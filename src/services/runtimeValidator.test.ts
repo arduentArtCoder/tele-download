@@ -29,3 +29,9 @@ test("buildChromeProfileValidationError explains real directory names vs UI labe
   assert.match(message, /Profile 2/u);
   assert.match(message, /UI profile names may not match/u);
 });
+
+test("chrome cookie validation is optional when no profile is configured", () => {
+  assert.doesNotThrow(() => {
+    resolveChromeCookiesPath("Default");
+  });
+});

@@ -147,6 +147,7 @@ export class YtDlpService {
 
   private async runCommand(url: string | undefined, arguments_: string[]): Promise<string> {
     const finalArguments = [
+      "--ignore-config",
       ...buildCookieArguments(url, this.config.CHROME_PROFILE),
       ...arguments_,
     ];
