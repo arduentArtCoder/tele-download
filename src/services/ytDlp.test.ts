@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { curateDownloadOptions, getDeliveryModeForSize } from "./ytDlp.js";
+import {
+  buildCookieArguments,
+  buildYtDlpErrorMessage,
+  curateDownloadOptions,
+  getDeliveryModeForSize,
+} from "./ytDlp.js";
 
 test("curateDownloadOptions keeps one best candidate per height and caps the list", () => {
   const options = curateDownloadOptions(
@@ -37,4 +42,22 @@ test("getDeliveryModeForSize switches to hosted links above the Telegram limit",
   assert.equal(getDeliveryModeForSize(limit, limit), "telegram");
   assert.equal(getDeliveryModeForSize(limit + 1, limit), "link");
   assert.equal(getDeliveryModeForSize(undefined, limit), "telegram");
+});
+
+test("buildCookieArguments enables Chrome cookie extraction by default", () => {
+  assert.deepEqual(buildCookieArguments(), ["--cookies-from-browser", "chrome"]);
+});
+
+test("buildCookieArguments includes the configured Chrome profile when set", () => {
+  assert.deepEqual(buildCookieArguments("Profile 2"), ["--cookies-from-browser", "chrome:Profile 2"]);
+});
+
+test("cookie database failures explain that CHROME_PROFILE must be a real directory name", () => {
+  const message = buildYtDlpErrorMessage(
+    'ERROR: could not find chrome cookies database in "/home/arthur/.config/google-chrome/Arthur"',
+  );
+
+  assert.match(message, /CHROME_PROFILE must be the real on-disk Chrome profile directory/u);
+  assert.match(message, /Default/u);
+  assert.match(message, /Profile 2/u);
 });

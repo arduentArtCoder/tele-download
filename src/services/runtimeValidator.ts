@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import type { RuntimeConfig } from "../config/index.js";
@@ -59,7 +60,38 @@ export async function validateRuntime(config: RuntimeConfig, logger: Logger): Pr
     await ensureBinaryRuns(binaryPath);
   }
 
+  if (config.CHROME_PATH) {
+    await ensureExecutable(config.CHROME_PATH);
+  }
+
+  if (config.CHROME_PROFILE) {
+    const chromeCookiesPath = resolveChromeCookiesPath(config.CHROME_PROFILE);
+
+    try {
+      await access(chromeCookiesPath, constants.R_OK);
+    } catch {
+      throw new Error(buildChromeProfileValidationError(config.CHROME_PROFILE, chromeCookiesPath));
+    }
+  }
+
   logger.info("Runtime validation complete", {
+    chromePath: config.CHROME_PATH ?? "auto",
     downloadDir: config.DOWNLOAD_DIR,
   });
+}
+
+export function resolveChromeCookiesPath(chromeProfile: string): string {
+  return path.join(os.homedir(), ".config", "google-chrome", chromeProfile, "Cookies");
+}
+
+export function buildChromeProfileValidationError(
+  chromeProfile: string,
+  chromeCookiesPath: string,
+): string {
+  return [
+    `CHROME_PROFILE="${chromeProfile}" does not point to a readable Chrome cookies database.`,
+    `Checked path: ${chromeCookiesPath}`,
+    'Use the real on-disk Chrome profile directory, usually "Default" or "Profile 2".',
+    "Chrome UI profile names may not match the directory names under ~/.config/google-chrome/.",
+  ].join(" ");
 }

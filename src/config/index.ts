@@ -64,6 +64,8 @@ const binDirectory = path.resolve(process.cwd(), "bin");
 
 export interface RuntimeConfig {
   BOT_TOKEN: string;
+  CHROME_PATH?: string;
+  CHROME_PROFILE?: string;
   DOWNLOAD_DIR: string;
   PUBLIC_BASE_URL: string;
   HTTP_PORT: number;
@@ -81,6 +83,8 @@ export interface RuntimeConfig {
 
 export const env: RuntimeConfig = {
   BOT_TOKEN: readRequiredString("BOT_TOKEN"),
+  ...(readChromePath() ?? {}),
+  ...(readChromeProfile() ?? {}),
   DOWNLOAD_DIR: resolveFromProjectRoot(
     readOptionalString("DOWNLOAD_DIR") ?? path.join(os.tmpdir(), "tele-download"),
   ),
@@ -118,4 +122,36 @@ function readPublicBaseUrl(name: string): string {
   parsedUrl.hash = "";
 
   return parsedUrl.toString().replace(/\/$/u, "");
+}
+
+function readChromePath():
+  | {
+      CHROME_PATH: string;
+    }
+  | undefined {
+  const chromePath = readOptionalString("CHROME_PATH");
+
+  if (!chromePath) {
+    return undefined;
+  }
+
+  return {
+    CHROME_PATH: resolveFromProjectRoot(chromePath),
+  };
+}
+
+function readChromeProfile():
+  | {
+      CHROME_PROFILE: string;
+    }
+  | undefined {
+  const chromeProfile = readOptionalString("CHROME_PROFILE");
+
+  if (!chromeProfile) {
+    return undefined;
+  }
+
+  return {
+    CHROME_PROFILE: chromeProfile,
+  };
 }

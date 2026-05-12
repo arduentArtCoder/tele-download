@@ -148,9 +148,15 @@ export class YtDlpService {
   }
 
   private async runCommand(_url: string | undefined, arguments_: string[]): Promise<string> {
+    const finalArguments = [
+      ...buildCookieArguments(this.config.CHROME_PROFILE),
+      ...arguments_,
+    ];
+
     return await new Promise<string>((resolve, reject) => {
       const childProcess = processRegistry.track(
-        spawn(this.config.YTDLP_PATH, arguments_, {
+        spawn(this.config.YTDLP_PATH, finalArguments, {
+          env: buildChildEnvironment(this.config.CHROME_PATH),
           stdio: ["ignore", "pipe", "pipe"],
         }),
       );
@@ -180,7 +186,7 @@ export class YtDlpService {
 
         if (code !== 0) {
           this.logger.warn("yt-dlp failed", {
-            arguments: arguments_,
+            arguments: finalArguments,
             code,
             signal,
             stderr,
@@ -188,7 +194,7 @@ export class YtDlpService {
 
           reject(
             new UserVisibleError(
-              `yt-dlp command failed.${stderr.trim() ? ` ${stderr.trim()}` : ""}`,
+              buildYtDlpErrorMessage(stderr),
               "YTDLP_FAILED",
             ),
           );
@@ -219,6 +225,14 @@ export class YtDlpService {
 
     return undefined;
   }
+}
+
+export function buildCookieArguments(chromeProfile: string | undefined = undefined): string[] {
+  if (chromeProfile) {
+    return ["--cookies-from-browser", `chrome:${chromeProfile}`];
+  }
+
+  return ["--cookies-from-browser", "chrome"];
 }
 
 export function curateDownloadOptions(
@@ -398,4 +412,26 @@ function sanitizeSize(sizeBytes: number | undefined): number | undefined {
   }
 
   return sizeBytes;
+}
+
+export function buildYtDlpErrorMessage(stderr: string): string {
+  const trimmedStderr = stderr.trim();
+  const baseMessage = `yt-dlp command failed.${trimmedStderr ? ` ${trimmedStderr}` : ""}`;
+
+  if (trimmedStderr.includes("could not find chrome cookies database")) {
+    return `${baseMessage} CHROME_PROFILE must be the real on-disk Chrome profile directory, such as "Default" or "Profile 2".`;
+  }
+
+  return baseMessage;
+}
+
+function buildChildEnvironment(chromePath: string | undefined): NodeJS.ProcessEnv {
+  if (!chromePath) {
+    return process.env;
+  }
+
+  return {
+    ...process.env,
+    CHROME_PATH: chromePath,
+  };
 }
