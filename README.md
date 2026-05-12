@@ -32,7 +32,7 @@ node dist/index.js
 
 For a long-running server process, use your preferred service manager such as `systemd`, `pm2`, or another supervisor around `node dist/index.js`.
 
-The bot always runs `yt-dlp` with `--cookies-from-browser chrome`, or `--cookies-from-browser chrome:<profile>` when `CHROME_PROFILE` is set. Per the yt-dlp README, the profile portion is the documented way to target a specific Chrome profile.
+For Instagram URLs, the bot runs `yt-dlp` with `--cookies-from-browser chrome`, or `--cookies-from-browser chrome:<profile>` when `CHROME_PROFILE` is set. Per the yt-dlp README, the profile portion is the documented way to target a specific Chrome profile.
 
 Important: `CHROME_PROFILE` is not the friendly name shown in the Chrome profile switcher unless that happens to match the directory name. Common valid values are `Default` and `Profile 2`. If you set something like `Arthur`, the bot now fails at startup if `~/.config/google-chrome/Arthur/Cookies` does not exist.
 

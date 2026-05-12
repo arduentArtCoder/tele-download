@@ -145,9 +145,9 @@ export class YtDlpService {
     return parseStructuredOutput(stdout);
   }
 
-  private async runCommand(_url: string | undefined, arguments_: string[]): Promise<string> {
+  private async runCommand(url: string | undefined, arguments_: string[]): Promise<string> {
     const finalArguments = [
-      ...buildCookieArguments(this.config.CHROME_PROFILE),
+      ...buildCookieArguments(url, this.config.CHROME_PROFILE),
       ...arguments_,
     ];
 
@@ -224,7 +224,14 @@ export class YtDlpService {
   }
 }
 
-export function buildCookieArguments(chromeProfile: string | undefined = undefined): string[] {
+export function buildCookieArguments(
+  url: string | undefined,
+  chromeProfile: string | undefined = undefined,
+): string[] {
+  if (!shouldUseBrowserCookies(url)) {
+    return [];
+  }
+
   if (chromeProfile) {
     return ["--cookies-from-browser", `chrome:${chromeProfile}`];
   }
@@ -424,4 +431,23 @@ export function buildYtDlpErrorMessage(stderr: string): string {
   }
 
   return baseMessage;
+}
+
+function shouldUseBrowserCookies(url: string | undefined): boolean {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname.toLowerCase();
+
+    return (
+      hostname === "instagram.com" ||
+      hostname === "www.instagram.com" ||
+      hostname === "m.instagram.com"
+    );
+  } catch {
+    return false;
+  }
 }

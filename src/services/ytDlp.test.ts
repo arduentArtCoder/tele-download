@@ -44,12 +44,22 @@ test("getDeliveryModeForSize switches to hosted links above the Telegram limit",
   assert.equal(getDeliveryModeForSize(undefined, limit), "telegram");
 });
 
-test("buildCookieArguments enables Chrome cookie extraction by default", () => {
-  assert.deepEqual(buildCookieArguments(), ["--cookies-from-browser", "chrome"]);
+test("buildCookieArguments does not inject browser cookies for unrelated sites", () => {
+  assert.deepEqual(buildCookieArguments("https://youtu.be/example"), []);
 });
 
 test("buildCookieArguments includes the configured Chrome profile when set", () => {
-  assert.deepEqual(buildCookieArguments("Profile 2"), ["--cookies-from-browser", "chrome:Profile 2"]);
+  assert.deepEqual(buildCookieArguments("https://www.instagram.com/reel/abc123/", "Profile 2"), [
+    "--cookies-from-browser",
+    "chrome:Profile 2",
+  ]);
+});
+
+test("buildCookieArguments uses default Chrome profile syntax for Instagram when no profile is set", () => {
+  assert.deepEqual(buildCookieArguments("https://www.instagram.com/reel/abc123/"), [
+    "--cookies-from-browser",
+    "chrome",
+  ]);
 });
 
 test("cookie database failures explain that CHROME_PROFILE must be a real directory name", () => {
